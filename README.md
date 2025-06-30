@@ -6,17 +6,24 @@ This repository contains summaries of the latest AI research papers, automatical
 
 ## Paper Analytics
 
-### Topic Distribution
-![Topic Distribution](visualizations/topic_distribution.png)
+### Comprehensive Analysis Dashboard
+![Comprehensive Analysis Dashboard](visualizations/dashboard.png)
 
-### Monthly Topic Distribution (Latest Month)
-![Monthly Topic Pie Chart](visualizations/monthly_topic_pie.png)
+### Detailed Analytics Grid
 
-### Daily Paper Submission Analysis
-![TSA Decomposition](visualizations/tsa_decomposition.png)
+| Topic Distribution (Overall) | Papers Published by Month |
+| :---: | :---: |
+| ![Topic Distribution](visualizations/topic_distribution.png) | ![Papers by Month](visualizations/papers_by_month.png) |
 
-### Papers Added Over Time
-![Papers per Day](visualizations/papers_per_day.png)
+| Monthly Topic Trends (Last 3 Months) | Top Prolific Authors |
+| :---: | :---: |
+| ![Monthly Topic Trends](visualizations/monthly_topic_trends.png) | ![Top Authors](visualizations/author_network.png) |
+
+### Additional Visualizations
+
+| Monthly Topic Distribution (Latest Month) | Daily Paper Submission Analysis |
+| :---: | :---: |
+| ![Monthly Topic Pie Chart](visualizations/monthly_topic_pie.png) | ![TSA Decomposition](visualizations/tsa_decomposition.png) |
 
 ## Table of Contents
 

@@ -1,16 +1,23 @@
 import re
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
 import traceback
 import logging
+import os
+from matplotlib.gridspec import GridSpec
+from datetime import datetime, timedelta
 
 # Set up logging
 logging.basicConfig(filename='analysis.log', level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     filemode='w')
+
+# Ensure visualizations directory exists
+os.makedirs('visualizations', exist_ok=True)
 
 def parse_readme(readme_path='README.md'):
     """Parses the README.md file to extract paper details."""
@@ -107,6 +114,130 @@ def plot_monthly_topic_pie(df, save_path='visualizations/monthly_topic_pie.png')
     plt.close()
     logging.info("Monthly topic pie chart saved.")
 
+def plot_papers_by_month(df, save_path='visualizations/papers_by_month.png'):
+    """Plots a bar chart of papers published per month."""
+    logging.info(f"Generating papers by month plot at {save_path}...")
+    df['date'] = pd.to_datetime(df['date'])
+    df['month'] = df['date'].dt.to_period('M')
+    papers_by_month = df.groupby('month').size()
+    
+    plt.figure(figsize=(12, 6))
+    ax = papers_by_month.plot(kind='bar', color='steelblue')
+    plt.title('Papers Published by Month', fontsize=16)
+    plt.xlabel('Month', fontsize=12)
+    plt.ylabel('Number of Papers', fontsize=12)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+    logging.info("Papers by month plot saved.")
+    return papers_by_month
+
+def plot_monthly_topic_trends(df, save_path='visualizations/monthly_topic_trends.png'):
+    """Plots a stacked bar chart showing topic distribution by month."""
+    logging.info(f"Generating monthly topic trends plot at {save_path}...")
+    df['date'] = pd.to_datetime(df['date'])
+    df['month'] = df['date'].dt.to_period('M')
+    
+    # Get the last 3 months of data
+    last_three_months = sorted(df['month'].unique())[-3:]
+    filtered_df = df[df['month'].isin(last_three_months)]
+    
+    if filtered_df.empty:
+        logging.warning("Skipping monthly topic trends: not enough monthly data.")
+        return
+    
+    # Create pivot table for stacked bar chart
+    topic_by_month = pd.crosstab(filtered_df['month'], filtered_df['topic'])
+    
+    plt.figure(figsize=(14, 8))
+    topic_by_month.plot(kind='bar', stacked=True, colormap='viridis')
+    plt.title('Topic Distribution by Month (Last 3 Months)', fontsize=16)
+    plt.xlabel('Month', fontsize=12)
+    plt.ylabel('Number of Papers', fontsize=12)
+    plt.xticks(rotation=45)
+    plt.legend(title='Topic', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+    logging.info("Monthly topic trends plot saved.")
+
+def plot_author_collaboration_network(df, save_path='visualizations/author_network.png', max_authors=50):
+    """Plots a simple collaboration network of the most frequent authors."""
+    logging.info(f"Generating author collaboration network at {save_path}...")
+    
+    # Extract and count authors
+    all_authors = []
+    for author_list in df['authors']:
+        authors = [a.strip() for a in author_list.split(',')]
+        all_authors.extend(authors)
+    
+    author_counts = pd.Series(all_authors).value_counts()
+    top_authors = author_counts.head(max_authors)
+    
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x=top_authors.values, y=top_authors.index, palette='viridis')
+    plt.title(f'Top {len(top_authors)} Most Prolific Authors', fontsize=16)
+    plt.xlabel('Number of Papers', fontsize=12)
+    plt.ylabel('Author', fontsize=12)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+    logging.info("Author network plot saved.")
+
+def create_dashboard(df, save_path='visualizations/dashboard.png'):
+    """Creates a comprehensive dashboard with multiple plots in a grid layout."""
+    logging.info(f"Generating dashboard at {save_path}...")
+    df['date'] = pd.to_datetime(df['date'])
+    
+    # Create a figure with a grid layout
+    fig = plt.figure(figsize=(20, 16))
+    gs = GridSpec(2, 2, figure=fig)
+    
+    # Plot 1: Topic Distribution (Top-left)
+    ax1 = fig.add_subplot(gs[0, 0])
+    topic_counts = df['topic'].value_counts()
+    sns.barplot(x=topic_counts.values, y=topic_counts.index, palette='viridis', ax=ax1)
+    ax1.set_title('Distribution of AI Research Topics', fontsize=14)
+    ax1.set_xlabel('Number of Papers', fontsize=10)
+    ax1.set_ylabel('Topic', fontsize=10)
+    
+    # Plot 2: Papers Over Time (Top-right)
+    ax2 = fig.add_subplot(gs[0, 1])
+    df_sorted = df.sort_values('date')
+    papers_per_day = df_sorted.groupby('date').size().cumsum()
+    ax2.plot(papers_per_day.index, papers_per_day.values, marker='o', linestyle='-', color='steelblue')
+    ax2.set_title('Cumulative Papers Over Time', fontsize=14)
+    ax2.set_xlabel('Date', fontsize=10)
+    ax2.set_ylabel('Number of Papers', fontsize=10)
+    ax2.tick_params(axis='x', rotation=45)
+    ax2.grid(True, linestyle='--', alpha=0.7)
+    
+    # Plot 3: Monthly Topic Distribution (Bottom-left)
+    ax3 = fig.add_subplot(gs[1, 0])
+    latest_month = df['date'].max().to_period('M')
+    monthly_df = df[df['date'].dt.to_period('M') == latest_month]
+    topic_counts = monthly_df['topic'].value_counts()
+    ax3.pie(topic_counts, labels=topic_counts.index, autopct='%1.1f%%', 
+           startangle=140, colors=sns.color_palette('viridis', len(topic_counts)))
+    ax3.set_title(f'Topic Distribution for {latest_month.strftime("%B %Y")}', fontsize=14)
+    ax3.axis('equal')
+    
+    # Plot 4: Papers by Month (Bottom-right)
+    ax4 = fig.add_subplot(gs[1, 1])
+    df['month'] = df['date'].dt.to_period('M')
+    papers_by_month = df.groupby('month').size()
+    papers_by_month.plot(kind='bar', color='steelblue', ax=ax4)
+    ax4.set_title('Papers Published by Month', fontsize=14)
+    ax4.set_xlabel('Month', fontsize=10)
+    ax4.set_ylabel('Number of Papers', fontsize=10)
+    ax4.tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    logging.info("Dashboard saved.")
+
 if __name__ == "__main__":
     try:
         logging.info("--- Starting Paper Analysis ---")
@@ -117,9 +248,16 @@ if __name__ == "__main__":
             papers_with_topics_df = analyze_topics(papers_df)
             topic_counts = papers_with_topics_df['topic'].value_counts()
             
+            # Generate individual plots
             plot_topic_distribution(topic_counts)
             plot_tsa_decomposition(papers_with_topics_df)
             plot_monthly_topic_pie(papers_with_topics_df)
+            plot_papers_by_month(papers_with_topics_df)
+            plot_monthly_topic_trends(papers_with_topics_df)
+            plot_author_collaboration_network(papers_with_topics_df)
+            
+            # Generate comprehensive dashboard
+            create_dashboard(papers_with_topics_df)
             
             logging.info("--- Analysis complete. CSV and visualizations have been updated. ---")
         else:
