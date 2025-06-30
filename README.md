@@ -9,6 +9,12 @@ This repository contains summaries of the latest AI research papers, automatical
 ### Topic Distribution
 ![Topic Distribution](visualizations/topic_distribution.png)
 
+### Monthly Topic Distribution (Latest Month)
+![Monthly Topic Pie Chart](visualizations/monthly_topic_pie.png)
+
+### Daily Paper Submission Analysis
+![TSA Decomposition](visualizations/tsa_decomposition.png)
+
 ### Papers Added Over Time
 ![Papers per Day](visualizations/papers_per_day.png)
 
