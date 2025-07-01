@@ -10,6 +10,8 @@ def fetch_papers(query, max_results_per_page=1000, max_total_results=10000):
     base_url = 'http://export.arxiv.org/api/query?'
     all_papers = []
     start = 0
+    empty_response_count = 0  # Track consecutive empty responses
+    max_empty_responses = 2   # Allow a few empty responses before giving up
     
     print("Starting to fetch papers with pagination...")
     while True:
@@ -32,8 +34,19 @@ def fetch_papers(query, max_results_per_page=1000, max_total_results=10000):
             print(f"Page fetched. Found {len(page_papers)} entries.")
             
             if not page_papers:
-                print("No more papers found. Ending fetch.")
-                break
+                empty_response_count += 1
+                if empty_response_count >= max_empty_responses:
+                    print(f"Received {empty_response_count} consecutive empty responses. Ending fetch.")
+                    break
+                else:
+                    # Continue pagination despite empty result - arXiv API sometimes returns empty pages erroneously
+                    print("Warning: Empty page received, but continuing pagination...")
+                    start += max_results_per_page
+                    sleep(5)  # Wait longer after an empty response
+                    continue
+            else:
+                # Reset counter when we get actual results
+                empty_response_count = 0
             
             all_papers.extend(page_papers)
             start += len(page_papers)
