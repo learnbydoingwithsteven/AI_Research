@@ -57,7 +57,9 @@ def format_papers_md(papers):
     """Formats a list of papers from the feed into Markdown."""
     papers_by_date = {}
     for paper in papers:
-        date_str = datetime.datetime.strptime(paper.published, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y-%m-%d')
+        # Use published_parsed for robust date handling
+        date_obj = datetime.datetime(*paper.published_parsed[:6])
+        date_str = date_obj.strftime('%Y-%m-%d')
         if date_str not in papers_by_date:
             papers_by_date[date_str] = []
         papers_by_date[date_str].append(paper)
@@ -83,6 +85,43 @@ def format_papers_md(papers):
 
     return md_string
 
+def rebuild_readme(papers):
+    """Rebuilds the README.md with a fresh list of papers."""
+    print("Rebuilding README.md...")
+    
+    # 1. Format the new paper content
+    new_papers_md = format_papers_md(papers)
+    
+    # 2. Generate a new Table of Contents
+    dates = sorted(list(set([datetime.datetime(*p.published_parsed[:6]).strftime('%Y-%m-%d') for p in papers])), reverse=True)
+    new_toc = "## Table of Contents\n\n"
+    for date_str in dates:
+        new_toc += f'- [{date_str}](#{date_str.replace("-", "")})\n'
+        
+    # 3. Read the existing README to preserve the header
+    with open('README.md', 'r', encoding='utf-8') as f:
+        readme_content = f.read()
+        
+    # 4. Find where the paper list starts and cut everything after it
+    # The paper list starts after the '---' following the Table of Contents
+    toc_start_marker = "## Table of Contents"
+    
+    toc_start_index = readme_content.find(toc_start_marker)
+    if toc_start_index == -1:
+        # If no TOC, just use the whole file as header (fallback)
+        print("Warning: '## Table of Contents' not found. Overwriting from top.")
+        readme_analytics_part = ""
+    else:
+        readme_analytics_part = readme_content[:toc_start_index]
+    
+    final_readme = readme_analytics_part + new_toc + "\n---\n\n" + new_papers_md
+    
+    # 6. Write the new content to the file
+    with open('README.md', 'w', encoding='utf-8') as f:
+        f.write(final_readme)
+    print("README.md has been successfully rebuilt.")
+
+
 if __name__ == "__main__":
     try:
         QUERY = 'cat:cs.AI+OR+cat:cs.LG'
@@ -90,55 +129,20 @@ if __name__ == "__main__":
         all_fetched_papers = fetch_papers(QUERY, max_results_per_page=1000, max_total_results=10000)
         print(f"Total papers fetched: {len(all_fetched_papers)}")
         
-        three_months_ago = datetime.datetime.now() - datetime.timedelta(days=90)
+        three_months_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=90)
         recent_papers = []
         print("Filtering papers for the last 3 months...")
         for paper in all_fetched_papers:
-            paper_date = datetime.datetime.strptime(paper.published, '%Y-%m-%dT%H:%M:%SZ')
+            # Use feedparser's parsed time object which is timezone-aware
+            paper_date = datetime.datetime(*paper.published_parsed[:6], tzinfo=datetime.timezone.utc)
             if paper_date > three_months_ago:
                 recent_papers.append(paper)
         print(f"Found {len(recent_papers)} papers from the last 3 months.")
 
         if recent_papers:
-            print(f"Found {len(recent_papers)} new papers to process.")
-            with open('README.md', 'r', encoding='utf-8') as f:
-                readme_content = f.read()
-
-            final_md_output = ""
-            new_papers_count = 0
-            print("Checking for duplicates and preparing new content...")
-            for paper in recent_papers:
-                if paper.title.replace('\n', ' ').strip() not in readme_content:
-                    final_md_output += format_papers_md([paper])
-                    new_papers_count += 1
-            
-            if final_md_output:
-                print(f"Found {new_papers_count} new, unique papers to add.")
-                # Update TOC and add papers
-                new_dates = sorted(list(set([datetime.datetime.strptime(p.published, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y-%m-%d') for p in recent_papers])), reverse=True)
-                all_date_headers = re.findall(r'## <a name="\d+"></a>Papers Added on (\d{4}-\d{2}-\d{2})', readme_content)
-                all_known_dates = sorted(list(set(all_date_headers + new_dates)), reverse=True)
-
-                new_toc = "## Table of Contents\n\n"
-                for date_str in all_known_dates:
-                    new_toc += f'- [{date_str}](#{date_str.replace("-", "")})\n'
-
-                toc_start_marker = "## Table of Contents"
-                toc_start_index = readme_content.find(toc_start_marker)
-                toc_end_marker = "\n---"
-                toc_end_index = readme_content.find(toc_end_marker, toc_start_index)
-
-                readme_with_new_toc = readme_content[:toc_start_index] + new_toc + readme_content[toc_end_index:]
-                insertion_marker = readme_with_new_toc.find(toc_end_marker, toc_start_index) + len(toc_end_marker)
-                final_readme = readme_with_new_toc[:insertion_marker] + "\n\n" + final_md_output + readme_with_new_toc[insertion_marker:]
-                
-                with open('README.md', 'w', encoding='utf-8') as f:
-                    f.write(final_readme)
-                print("README.md has been successfully updated.")
-            else:
-                print("No new, unique papers found to add.")
+            rebuild_readme(recent_papers)
         else:
-            print("No papers found in the last 3 months.")
+            print("No papers found in the last 3 months to update README.")
 
     except Exception as e:
         print("An error occurred:")
