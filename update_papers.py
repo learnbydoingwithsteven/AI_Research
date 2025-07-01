@@ -5,20 +5,53 @@ import traceback
 import re
 from time import sleep
 
-def fetch_papers(query, max_results=2000):
-    """Fetches papers from the arXiv API using requests and feedparser."""
+def fetch_papers(query, max_results_per_page=1000, max_total_results=10000):
+    """Fetches papers from the arXiv API using requests and feedparser, with pagination."""
     base_url = 'http://export.arxiv.org/api/query?'
-    search_query = f'search_query={query}&sortBy=submittedDate&sortOrder=descending&max_results={max_results}'
+    all_papers = []
+    start = 0
     
-    print(f"Querying URL: {base_url}{search_query}")
-    response = requests.get(base_url + search_query, timeout=30)
-    if response.status_code != 200:
-        raise ConnectionError(f"Failed to fetch from arXiv API. Status: {response.status_code}")
+    print("Starting to fetch papers with pagination...")
+    while True:
+        search_query = (f'search_query={query}&sortBy=submittedDate&sortOrder=descending' + 
+                        f'&start={start}&max_results={max_results_per_page}')
+        
+        print(f"Querying URL: {base_url}{search_query}")
+        try:
+            response = requests.get(base_url + search_query, timeout=30)
+            if response.status_code != 200:
+                print(f"Warning: Failed to fetch from arXiv API. Status: {response.status_code}. Retrying once...")
+                sleep(5)
+                response = requests.get(base_url + search_query, timeout=30)
+                if response.status_code != 200:
+                    print(f"Error: Failed to fetch from arXiv API on retry. Status: {response.status_code}. Aborting page fetch.")
+                    break
 
-    print("Parsing feed...")
-    feed = feedparser.parse(response.content)
-    print(f"Feed parsed. Found {len(feed.entries)} entries.")
-    return feed.entries
+            feed = feedparser.parse(response.content)
+            page_papers = feed.entries
+            print(f"Page fetched. Found {len(page_papers)} entries.")
+            
+            if not page_papers:
+                print("No more papers found. Ending fetch.")
+                break
+            
+            all_papers.extend(page_papers)
+            start += len(page_papers)
+            
+            if start >= max_total_results:
+                print(f"Reached max total results limit of {max_total_results}. Stopping fetch.")
+                break
+
+            # Be polite to the API
+            sleep(3)
+
+        except Exception as e:
+            print(f"An error occurred during fetch: {e}")
+            print(traceback.format_exc())
+            break
+            
+    print(f"Finished fetching. Total papers retrieved: {len(all_papers)}")
+    return all_papers
 
 def format_papers_md(papers):
     """Formats a list of papers from the feed into Markdown."""
@@ -54,7 +87,7 @@ if __name__ == "__main__":
     try:
         QUERY = 'cat:cs.AI+OR+cat:cs.LG'
         print("Fetching recent papers using requests and feedparser...")
-        all_fetched_papers = fetch_papers(QUERY)
+        all_fetched_papers = fetch_papers(QUERY, max_results_per_page=1000, max_total_results=10000)
         print(f"Total papers fetched: {len(all_fetched_papers)}")
         
         three_months_ago = datetime.datetime.now() - datetime.timedelta(days=90)
