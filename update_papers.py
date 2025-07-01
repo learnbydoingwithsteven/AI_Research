@@ -128,26 +128,76 @@ if __name__ == "__main__":
         end_date = datetime.datetime.now(datetime.timezone.utc)
         start_date = end_date - datetime.timedelta(days=90)
         
-        # Format dates for the arXiv API query
-        start_date_str = start_date.strftime('%Y%m%d%H%M%S')
-        end_date_str = end_date.strftime('%Y%m%d%H%M%S')
+        print(f"Target date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
-        # Construct the final query with categories and the date range
-        date_query = f'submittedDate:[{start_date_str} TO {end_date_str}]'
-        category_query = 'cat:cs.AI OR cat:cs.LG'
-        # Enclose category query in parentheses for correct AND logic
-        final_query = f'({category_query}) AND {date_query}'
-
-        print(f"Fetching papers from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}...")
+        # Get all months in our 90-day window
+        current_month = datetime.datetime(end_date.year, end_date.month, 1, tzinfo=datetime.timezone.utc)
+        months = []
+        while current_month >= start_date:
+            months.append(current_month)
+            # Go back one month
+            if current_month.month == 1:  # January
+                current_month = datetime.datetime(current_month.year - 1, 12, 1, tzinfo=datetime.timezone.utc)
+            else:
+                current_month = datetime.datetime(current_month.year, current_month.month - 1, 1, tzinfo=datetime.timezone.utc)
         
-        # Fetch all papers within the date range
-        all_fetched_papers = fetch_papers(final_query, max_results_per_page=1000, max_total_results=20000)
-        print(f"Total papers fetched in the date range: {len(all_fetched_papers)}")
+        all_fetched_papers = []
+        
+        # Query each month separately to ensure complete coverage
+        for month in months:
+            month_name = month.strftime('%Y-%m')
+            month_end = month.replace(day=28)  # Safe for all months
+            if month.month == 12:  # December
+                next_month = datetime.datetime(month.year + 1, 1, 1, tzinfo=datetime.timezone.utc)
+            else:
+                next_month = datetime.datetime(month.year, month.month + 1, 1, tzinfo=datetime.timezone.utc)
+            
+            # Format dates for the arXiv API query
+            month_start_str = month.strftime('%Y%m%d') + '000000'
+            month_end_str = (next_month - datetime.timedelta(seconds=1)).strftime('%Y%m%d%H%M%S')
+            
+            # Build query for this month
+            date_query = f'submittedDate:[{month_start_str} TO {month_end_str}]'
+            category_query = 'cat:cs.AI OR cat:cs.LG'
+            month_query = f'({category_query}) AND {date_query}'
+            
+            print(f"\nFetching papers for {month_name}...")
+            month_papers = fetch_papers(month_query, max_results_per_page=1000, max_total_results=10000)
+            print(f"Fetched {len(month_papers)} papers for {month_name}")
+            
+            all_fetched_papers.extend(month_papers)
+            sleep(5)  # Be polite between month queries
+        print(f"Total papers fetched: {len(all_fetched_papers)}")
 
-        if all_fetched_papers:
-            rebuild_readme(all_fetched_papers)
+        # Manually filter papers by date to ensure we get full 90-day coverage
+        recent_papers = []
+        month_counts = {}
+
+        print("Filtering papers for the last 90 days...")
+        for paper in all_fetched_papers:
+            # Use feedparser's parsed time object which is timezone-aware
+            paper_date = datetime.datetime(*paper.published_parsed[:6], tzinfo=datetime.timezone.utc)
+            # Count papers by month
+            month_key = paper_date.strftime('%Y-%m')
+            if month_key not in month_counts:
+                month_counts[month_key] = 0
+            month_counts[month_key] += 1
+            
+            # Keep papers within our 90-day window
+            if paper_date >= start_date and paper_date <= end_date:
+                recent_papers.append(paper)
+        
+        print(f"Found {len(recent_papers)} papers from the last 90 days.")
+        print("Papers per month:")
+        for month, count in sorted(month_counts.items()):
+            if month >= start_date.strftime('%Y-%m') and month <= end_date.strftime('%Y-%m'):
+                print(f"  {month}: {count} papers")
+
+        if recent_papers:
+            rebuild_readme(recent_papers)
         else:
             print("No papers found in the last 90 days to update README.")
+
 
     except Exception as e:
         print("An error occurred:")
