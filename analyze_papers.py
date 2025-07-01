@@ -99,8 +99,8 @@ def plot_tsa_decomposition(df, save_path='visualizations/tsa_decomposition.png')
     logging.info("TSA decomposition plot saved.")
 
 def plot_monthly_topic_pies(df):
-    """Plots pie charts of topic distribution for each of the last three months."""
-    logging.info("Generating monthly topic pie charts for the last 3 months...")
+    """Plots pie charts of topic distribution for all months of 2025 in a grid layout."""
+    logging.info("Generating monthly topic pie charts in grid layout...")
     df['date'] = pd.to_datetime(df['date'])
     df['month'] = df['date'].dt.to_period('M')
 
@@ -108,101 +108,248 @@ def plot_monthly_topic_pies(df):
         logging.warning("Skipping monthly pie charts: no data available.")
         return
 
-    end_month = df['month'].max()
-    start_month = end_month - 2
-    month_range = pd.period_range(start=start_month, end=end_month, freq='M')
-
-    for month in month_range:
-        monthly_df = df[df['month'] == month]
-        topic_counts = monthly_df['topic'].value_counts()
-        save_path = f'visualizations/topic_pie_{month.strftime("%Y_%m")}.png'
-
-        plt.style.use('seaborn-v0_8-whitegrid')
-        fig, ax = plt.subplots(figsize=(10, 10))
-
-        if topic_counts.empty:
-            logging.warning(f"No topics found for {month}. Generating empty plot.")
-            ax.text(0.5, 0.5, f'No Papers Found for\n{month.strftime("%B %Y")}',
-                    horizontalalignment='center', verticalalignment='center',
-                    fontsize=20, color='grey', transform=ax.transAxes)
-            ax.set_title(f'Topic Distribution for {month.strftime("%B %Y")}', fontsize=16)
-            ax.axis('off')
-        else:
-            ax.pie(topic_counts, labels=topic_counts.index, autopct='%1.1f%%',
-                   startangle=140, colors=sns.color_palette('viridis', len(topic_counts)))
-            ax.set_title(f'Topic Distribution for {month.strftime("%B %Y")}', fontsize=16)
-            ax.axis('equal')
+    # Get all months of 2025
+    all_months = sorted([m for m in df['month'].unique() if m.year == 2025])
+    
+    if len(all_months) == 0:
+        logging.warning("No 2025 data available for pie charts.")
+        return
+    
+    # Create a grid layout
+    n_months = len(all_months)
+    n_cols = min(3, n_months)  # At most 3 columns
+    n_rows = (n_months + n_cols - 1) // n_cols  # Ceiling division
+    
+    fig = plt.figure(figsize=(n_cols * 7, n_rows * 6))
+    plt.suptitle('Topic Distribution by Month (2025)', fontsize=20, y=0.98)
+    
+    # Plot each month in the grid
+    for i, month in enumerate(all_months):
+        month_str = month.strftime('%Y_%m')
+        month_df = df[df['month'] == month]
         
-        plt.tight_layout()
-        plt.savefig(save_path)
-        plt.close()
-        logging.info(f"Monthly topic pie chart saved for {month.strftime('%B %Y')} at {save_path}.")
+        if not month_df.empty:
+            ax = fig.add_subplot(n_rows, n_cols, i+1)
+            topic_counts = month_df['topic'].value_counts()
+            ax.pie(topic_counts.values, labels=None, autopct='%1.1f%%', 
+                  startangle=90, shadow=True, explode=[0.05] * len(topic_counts), 
+                  colors=sns.color_palette('viridis', len(topic_counts)))
+            ax.set_title(f'{month.strftime("%B %Y")}', fontsize=16)
+            ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle
+            
+            # Save individual month plots as well for detailed view
+            plt.figure(figsize=(10, 8))
+            plt.pie(topic_counts.values, labels=topic_counts.index, autopct='%1.1f%%', 
+                    startangle=90, shadow=True, explode=[0.05] * len(topic_counts), 
+                    colors=sns.color_palette('viridis', len(topic_counts)))
+            plt.title(f'Topic Distribution for {month.strftime("%B %Y")}', fontsize=16)
+            plt.axis('equal')
+            plt.tight_layout()
+            plt.savefig(f'visualizations/topic_pie_{month_str}.png')
+            plt.close()
+        else:
+            logging.warning(f"No data available for month {month_str}.")
+    
+    # Add a common legend at the bottom
+    unique_topics = sorted(df['topic'].unique())
+    if len(unique_topics) > 0:
+        handles = [plt.Rectangle((0,0),1,1, color=sns.color_palette('viridis', len(unique_topics))[i]) 
+                   for i in range(len(unique_topics))]
+        fig.legend(handles, unique_topics, loc='lower center', 
+                   bbox_to_anchor=(0.5, 0.02), ncol=min(4, len(unique_topics)), fontsize=12)
+    
+    plt.tight_layout(rect=[0, 0.05, 1, 0.95])  # Make room for suptitle and legend
+    plt.savefig('visualizations/monthly_topic_pies_grid.png')
+    plt.close()
+    logging.info("Monthly topic pie charts saved.")
+
 
 def plot_papers_by_month(df, save_path='visualizations/papers_by_month.png'):
-    """Plots a bar chart of papers published per month."""
+    """Plots a bar chart of papers published by month for all of 2025."""
     logging.info(f"Generating papers by month plot at {save_path}...")
     df['date'] = pd.to_datetime(df['date'])
     df['month'] = df['date'].dt.to_period('M')
-    papers_by_month = df.groupby('month').size()
-    start_date = df['date'].min().strftime('%Y-%m-%d')
-    end_date = df['date'].max().strftime('%Y-%m-%d')
     
-    plt.figure(figsize=(12, 6))
+    if df['month'].empty:
+        logging.warning("No monthly data available for papers by month plot.")
+        return
+    
+    # Get all months of 2025
+    months_2025 = sorted([m for m in df['month'].unique() if m.year == 2025])
+    
+    if not months_2025:
+        logging.warning("No 2025 data available for papers by month plot.")
+        return
+    
+    papers_by_month = df.groupby('month').size()
+    papers_by_month = papers_by_month.reindex(months_2025, fill_value=0)
     papers_by_month.index = papers_by_month.index.strftime('%Y-%m')
-    ax = papers_by_month.plot(kind='bar', color='steelblue')
-    plt.title(f'Papers Published by Month\n({start_date} to {end_date})', fontsize=16)
-    plt.xlabel('Month', fontsize=12)
-    plt.ylabel('Number of Papers', fontsize=12)
-    plt.xticks(rotation=45)
+    
+    plt.style.use('seaborn-v0_8-darkgrid')
+    plt.figure(figsize=(14, 8))
+    ax = sns.barplot(x=papers_by_month.index, y=papers_by_month.values, palette='viridis')
+    
+    ax.set_title('Papers Published by Month (2025)', fontsize=16)
+    ax.set_xlabel('Month', fontsize=12)
+    ax.set_ylabel('Number of Papers', fontsize=12)
+    ax.tick_params(axis='x', rotation=45)
+    
+    # Add value labels on top of each bar
+    for i, v in enumerate(papers_by_month.values):
+        ax.text(i, v + 50, str(int(v)), ha='center', fontsize=10)
+    
+    # Add a grid line to show the average
+    avg = papers_by_month.mean()
+    ax.axhline(y=avg, color='red', linestyle='--', alpha=0.7)
+    ax.text(len(papers_by_month)-0.5, avg+100, f'Avg: {int(avg)}', color='red')
+    
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
     logging.info("Papers by month plot saved.")
+    
+    # Create a second version with additional analytics in a grid layout
+    fig = plt.figure(figsize=(16, 10))
+    gs = GridSpec(2, 2, figure=fig)
+    
+    # Monthly papers bar chart
+    ax1 = fig.add_subplot(gs[0, 0])
+    sns.barplot(x=papers_by_month.index, y=papers_by_month.values, palette='viridis', ax=ax1)
+    ax1.set_title('Papers by Month (2025)', fontsize=14)
+    ax1.set_xlabel('Month', fontsize=12)
+    ax1.set_ylabel('Number of Papers', fontsize=12)
+    ax1.tick_params(axis='x', rotation=45)
+    
+    # Cumulative papers line chart
+    ax2 = fig.add_subplot(gs[0, 1])
+    cumulative = papers_by_month.cumsum()
+    ax2.plot(cumulative.index, cumulative.values, marker='o', linestyle='-', color='steelblue')
+    ax2.set_title('Cumulative Papers (2025)', fontsize=14)
+    ax2.set_xlabel('Month', fontsize=12)
+    ax2.set_ylabel('Total Papers', fontsize=12)
+    ax2.tick_params(axis='x', rotation=45)
+    ax2.grid(True, linestyle='--', alpha=0.7)
+    
+    # Monthly growth rate
+    ax3 = fig.add_subplot(gs[1, 0])
+    growth = papers_by_month.pct_change() * 100
+    growth = growth.fillna(0)  # Replace NaN for first month
+    sns.barplot(x=growth.index, y=growth.values, palette='coolwarm', ax=ax3)
+    ax3.set_title('Monthly Growth Rate (%)', fontsize=14)
+    ax3.set_xlabel('Month', fontsize=12)
+    ax3.set_ylabel('Growth %', fontsize=12)
+    ax3.tick_params(axis='x', rotation=45)
+    ax3.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+    
+    # Month-over-month comparison
+    ax4 = fig.add_subplot(gs[1, 1])
+    if len(papers_by_month) > 1:
+        x = np.arange(len(papers_by_month)-1)  # One less for comparison
+        width = 0.35
+        current = papers_by_month.values[1:]
+        previous = papers_by_month.values[:-1]
+        
+        ax4.bar(x - width/2, current, width, label='Current Month')
+        ax4.bar(x + width/2, previous, width, label='Previous Month')
+        ax4.set_title('Month-over-Month Comparison', fontsize=14)
+        ax4.set_xlabel('Month', fontsize=12)
+        ax4.set_ylabel('Number of Papers', fontsize=12)
+        ax4.set_xticks(x)
+        ax4.set_xticklabels(papers_by_month.index[1:], rotation=45)
+        ax4.legend()
+    else:
+        ax4.text(0.5, 0.5, 'Not enough data for comparison', 
+                 ha='center', va='center', fontsize=12)
+    
+    plt.tight_layout()
+    plt.savefig('visualizations/papers_by_month_analytics.png')
+    plt.close()
+    logging.info("Enhanced papers by month analytics saved.")
+
 
 def plot_monthly_topic_trends(df, save_path='visualizations/monthly_topic_trends.png'):
-    """Plots a stacked bar chart showing topic distribution by month."""
+    """Plots a stacked bar chart showing topic distribution by month for all months of 2025."""
     logging.info(f"Generating monthly topic trends plot at {save_path}...")
     df['date'] = pd.to_datetime(df['date'])
     df['month'] = df['date'].dt.to_period('M')
-
+    
     if df['month'].empty:
-        logging.warning("Skipping monthly topic trends plot: no data available.")
+        logging.warning("No monthly data available for topic trends plot.")
         return
-        
-    end_month = df['month'].max()
-    start_month = end_month - 2
-    month_range = pd.period_range(start=start_month, end=end_month, freq='M')
     
-    filtered_df = df[df['month'].isin(month_range)]
+    # Get all months of 2025
+    months_2025 = sorted([m for m in df['month'].unique() if m.year == 2025])
     
+    if not months_2025:
+        logging.warning("No 2025 data available for topic trends plot.")
+        return
+    
+    # Filter data for 2025 months
+    filtered_df = df[df['month'].isin(months_2025)]
+    
+    # Create a cross-tabulation of topic counts by month
     topic_by_month = pd.crosstab(filtered_df['month'], filtered_df['topic'])
-    topic_by_month = topic_by_month.reindex(month_range, fill_value=0)
-
-    plt.style.use('seaborn-v0_8-darkgrid')
-    fig, ax = plt.subplots(figsize=(14, 8))
+    topic_by_month = topic_by_month.reindex(months_2025, fill_value=0)
     
+    # Convert period index to string for better display
     topic_by_month.index = topic_by_month.index.strftime('%Y-%m')
     
-    if topic_by_month.empty and not topic_by_month.columns.any():
-        logging.warning("No topics to plot for the last 3 months. Generating empty plot.")
-        ax.text(0.5, 0.5, 'No Data Available for the Last 3 Months', 
-                horizontalalignment='center', verticalalignment='center', 
-                fontsize=16, color='grey')
-        ax.set_title('Monthly Topic Distribution (Last 3 Months)', fontsize=16)
-        ax.set_xlabel('Month', fontsize=12)
-        ax.set_ylabel('Number of Papers', fontsize=12)
-    else:
-        topic_by_month.plot(kind='bar', stacked=True, colormap='viridis', ax=ax, width=0.8)
-        ax.set_title('Monthly Topic Distribution (Last 3 Months)', fontsize=16)
-        ax.set_xlabel('Month', fontsize=12)
-        ax.set_ylabel('Number of Papers', fontsize=12)
-        ax.tick_params(axis='x', rotation=45)
-        ax.legend(title='Topic', bbox_to_anchor=(1.02, 1), loc='upper left')
+    # Calculate the percentage of each topic within a month
+    topic_by_month_pct = topic_by_month.div(topic_by_month.sum(axis=1), axis=0).fillna(0)
+    
+    # Plotting
+    plt.style.use('seaborn-v0_8-pastel')
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 18))
+    
+    # Absolute numbers plot
+    topic_by_month.plot(kind='bar', stacked=True, colormap='viridis', ax=ax1)
+    ax1.set_title(f'Topic Distribution by Month - 2025 (Absolute Numbers)', fontsize=18)
+    ax1.set_xlabel('Month', fontsize=14)
+    ax1.set_ylabel('Number of Papers', fontsize=14)
+    ax1.tick_params(axis='x', rotation=45)
+    ax1.legend(title='Topic', bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    # Percentage plot
+    topic_by_month_pct.plot(kind='bar', stacked=True, colormap='viridis', ax=ax2)
+    ax2.set_title(f'Topic Distribution by Month - 2025 (Percentage)', fontsize=18)
+    ax2.set_xlabel('Month', fontsize=14)
+    ax2.set_ylabel('Percentage of Papers', fontsize=14)
+    ax2.tick_params(axis='x', rotation=45)
+    ax2.set_ylim(0, 1.0)
+    ax2.legend(title='Topic', bbox_to_anchor=(1.05, 1), loc='upper left')
     
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
-    logging.info("Monthly topic trends plot saved.")
+    
+    # Create a second version with a grid of individual monthly plots
+    n_months = len(months_2025)
+    n_cols = min(3, n_months)  # At most 3 columns
+    n_rows = (n_months + n_cols - 1) // n_cols  # Ceiling division
+    
+    fig = plt.figure(figsize=(n_cols * 6, n_rows * 7))
+    plt.suptitle('Monthly Topic Distribution - 2025', fontsize=20, y=0.98)
+    
+    for i, month in enumerate(months_2025):
+        month_str = month.strftime('%Y-%m')
+        month_data = topic_by_month.loc[month_str]
+        
+        ax = fig.add_subplot(n_rows, n_cols, i+1)
+        month_data.plot(kind='bar', colormap='viridis', ax=ax)
+        ax.set_title(f'{month.strftime("%B %Y")}', fontsize=16)
+        ax.set_ylabel('Number of Papers')
+        ax.tick_params(axis='x', rotation=45)
+        
+        if i == 0:  # Only add legend for the first subplot to avoid repetition
+            ax.legend(title='Topic', bbox_to_anchor=(1.05, 1), loc='upper left')
+        else:
+            ax.legend().set_visible(False)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.95])  # Make room for suptitle
+    plt.savefig('visualizations/monthly_topic_grid.png')
+    plt.close()
+    
+    logging.info("Monthly topic trends plots saved.")
 
 def plot_author_collaboration_network(df, save_path='visualizations/author_network.png', max_authors=50):
     """Plots a simple collaboration network of the most frequent authors."""

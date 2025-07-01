@@ -135,21 +135,23 @@ def rebuild_readme(papers):
     print("README.md has been successfully rebuilt.")
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for updating the paper list."""
     try:
-        # Define the date range for the last 90 days
+        # Define the date range for all of 2025 to date
         end_date = datetime.datetime.now(datetime.timezone.utc)
-        start_date = end_date - datetime.timedelta(days=90)
+        # Start from January 1, 2025
+        start_date = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
         
         print(f"Target date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
-        # Get all months in our 90-day window
-        # First determine the month of start_date (even if it's partially covered)
-        start_month = datetime.datetime(start_date.year, start_date.month, 1, tzinfo=datetime.timezone.utc)
+        # Get all months in 2025 to date
+        # Start with January 2025
+        start_month = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
         current_month = datetime.datetime(end_date.year, end_date.month, 1, tzinfo=datetime.timezone.utc)
         
         months = []
-        # Include all months from current_month down to and including start_month
+        # Include all months from current_month down to and including January 2025
         while current_month >= start_month:
             months.append(current_month)
             print(f"Including month: {current_month.strftime('%Y-%m')}")
@@ -191,7 +193,7 @@ if __name__ == "__main__":
         recent_papers = []
         month_counts = {}
 
-        print("Filtering papers for the last 90 days...")
+        print("Filtering papers for 2025 to date...")
         for paper in all_fetched_papers:
             # Use feedparser's parsed time object which is timezone-aware
             paper_date = datetime.datetime(*paper.published_parsed[:6], tzinfo=datetime.timezone.utc)
@@ -201,11 +203,11 @@ if __name__ == "__main__":
                 month_counts[month_key] = 0
             month_counts[month_key] += 1
             
-            # Keep papers within our 90-day window
+            # Keep papers within 2025 so far
             if paper_date >= start_date and paper_date <= end_date:
                 recent_papers.append(paper)
         
-        print(f"Found {len(recent_papers)} papers from the last 90 days.")
+        print(f"Found {len(recent_papers)} papers for 2025 to date.")
         print("Papers per month:")
         for month, count in sorted(month_counts.items()):
             if month >= start_date.strftime('%Y-%m') and month <= end_date.strftime('%Y-%m'):
@@ -220,3 +222,6 @@ if __name__ == "__main__":
     except Exception as e:
         print("An error occurred:")
         print(traceback.format_exc())
+
+if __name__ == "__main__":
+    main()
