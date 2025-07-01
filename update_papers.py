@@ -124,25 +124,30 @@ def rebuild_readme(papers):
 
 if __name__ == "__main__":
     try:
-        QUERY = 'cat:cs.AI+OR+cat:cs.LG'
-        print("Fetching recent papers using requests and feedparser...")
-        all_fetched_papers = fetch_papers(QUERY, max_results_per_page=1000, max_total_results=10000)
-        print(f"Total papers fetched: {len(all_fetched_papers)}")
+        # Define the date range for the last 90 days
+        end_date = datetime.datetime.now(datetime.timezone.utc)
+        start_date = end_date - datetime.timedelta(days=90)
         
-        three_months_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=90)
-        recent_papers = []
-        print("Filtering papers for the last 3 months...")
-        for paper in all_fetched_papers:
-            # Use feedparser's parsed time object which is timezone-aware
-            paper_date = datetime.datetime(*paper.published_parsed[:6], tzinfo=datetime.timezone.utc)
-            if paper_date > three_months_ago:
-                recent_papers.append(paper)
-        print(f"Found {len(recent_papers)} papers from the last 3 months.")
+        # Format dates for the arXiv API query
+        start_date_str = start_date.strftime('%Y%m%d%H%M%S')
+        end_date_str = end_date.strftime('%Y%m%d%H%M%S')
+        
+        # Construct the final query with categories and the date range
+        date_query = f'submittedDate:[{start_date_str} TO {end_date_str}]'
+        category_query = 'cat:cs.AI OR cat:cs.LG'
+        # Enclose category query in parentheses for correct AND logic
+        final_query = f'({category_query}) AND {date_query}'
 
-        if recent_papers:
-            rebuild_readme(recent_papers)
+        print(f"Fetching papers from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}...")
+        
+        # Fetch all papers within the date range
+        all_fetched_papers = fetch_papers(final_query, max_results_per_page=1000, max_total_results=20000)
+        print(f"Total papers fetched in the date range: {len(all_fetched_papers)}")
+
+        if all_fetched_papers:
+            rebuild_readme(all_fetched_papers)
         else:
-            print("No papers found in the last 3 months to update README.")
+            print("No papers found in the last 90 days to update README.")
 
     except Exception as e:
         print("An error occurred:")
