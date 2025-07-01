@@ -131,10 +131,15 @@ if __name__ == "__main__":
         print(f"Target date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
         # Get all months in our 90-day window
+        # First determine the month of start_date (even if it's partially covered)
+        start_month = datetime.datetime(start_date.year, start_date.month, 1, tzinfo=datetime.timezone.utc)
         current_month = datetime.datetime(end_date.year, end_date.month, 1, tzinfo=datetime.timezone.utc)
+        
         months = []
-        while current_month >= start_date:
+        # Include all months from current_month down to and including start_month
+        while current_month >= start_month:
             months.append(current_month)
+            print(f"Including month: {current_month.strftime('%Y-%m')}")
             # Go back one month
             if current_month.month == 1:  # January
                 current_month = datetime.datetime(current_month.year - 1, 12, 1, tzinfo=datetime.timezone.utc)
